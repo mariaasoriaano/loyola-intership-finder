@@ -1,5 +1,10 @@
 pandas
+xlrd
 langchain
 langchain-community
+langchain-huggingface
+langchain-chroma
+langchain-groq
 sentence-transformers
 chromadb
+python-dotenv

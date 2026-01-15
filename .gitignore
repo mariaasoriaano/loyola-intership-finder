@@ -2,3 +2,4 @@ loyola-finder
 .env
 companies
 data
+chroma_db
