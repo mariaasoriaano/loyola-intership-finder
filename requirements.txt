@@ -1,4 +1,5 @@
 pandas
+pathlib
 xlrd
 langchain
 langchain-community
