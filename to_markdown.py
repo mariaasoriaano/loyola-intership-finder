@@ -2,50 +2,61 @@ import pandas as pd
 from pathlib import Path
 
 
-def excel_to_markdown_csv(excel_path: Path, output_dir: Path):
-    """
-    Convierte un Excel en Markdown y lo guarda dentro de un CSV
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_csv = output_dir / excel_path.with_suffix(".csv").name
-
+def excel_to_markdown(excel_path: Path) -> str:
     xls = pd.ExcelFile(excel_path)
     markdown_blocks = []
 
     for sheet_name in xls.sheet_names:
         df = pd.read_excel(xls, sheet_name=sheet_name)
 
-        markdown_blocks.append(f"# {sheet_name}\n")
+        markdown_blocks.append(f"## {excel_path.name} - {sheet_name}\n")
 
         if df.empty:
             markdown_blocks.append("_Hoja vacía_\n")
         else:
             markdown_blocks.append(df.to_markdown(index=False) + "\n")
 
-    markdown_content = "\n".join(markdown_blocks)
-
-    pd.DataFrame(
-        {"markdown": [markdown_content]}
-    ).to_csv(output_csv, index=False, encoding="utf-8")
-
-    print(f"✔ Generado: {output_csv}")
+    return "\n".join(markdown_blocks)
 
 
-def process_companies(companies_dir: str, output_dir: str):
-    companies_path = Path(companies_dir)
-    output_path = Path(output_dir)
+def process_companies(companies_dir: Path, output_dir: Path):
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    if not companies_path.exists():
-        raise FileNotFoundError(f"No existe la carpeta: {companies_path}")
+    if not companies_dir.exists():
+        raise FileNotFoundError(f"No existe la carpeta: {companies_dir}")
 
-    for company_folder in companies_path.iterdir():
-        if company_folder.is_dir():
-            for excel_file in company_folder.glob("*.xlsx"):
-                excel_to_markdown_csv(excel_file, output_path)
+    for company_folder in companies_dir.iterdir():
+        if not company_folder.is_dir():
+            continue
+
+        company_name = company_folder.name
+        markdown_company = [f"# {company_name}\n"]
+
+        excel_files = [
+            f for f in company_folder.rglob("*")
+            if f.suffix.lower() in [".xlsx", ".xls", ".xlsm"]
+]
+
+        if not excel_files:
+            print(f"⚠ Sin Excel en {company_name}")
+            continue
+
+        for excel_file in excel_files:
+            markdown_company.append(excel_to_markdown(excel_file))
+
+        output_csv = output_dir / f"{company_name}.csv"
+
+        pd.DataFrame(
+            {"markdown": ["\n".join(markdown_company)]}
+        ).to_csv(output_csv, index=False, encoding="utf-8")
+
+        print(f"✔ Generado: {output_csv}")
 
 
 if __name__ == "__main__":
-    COMPANIES_DIR = "companies"
-    OUTPUT_DIR = "data"
+    BASE_DIR = Path(__file__).resolve().parent
+
+    COMPANIES_DIR = BASE_DIR / "companies"
+    OUTPUT_DIR = BASE_DIR / "data"
 
     process_companies(COMPANIES_DIR, OUTPUT_DIR)
