@@ -44,13 +44,13 @@ def process_companies(companies_dir: Path, output_dir: Path):
         for excel_file in excel_files:
             markdown_company.append(excel_to_markdown(excel_file))
 
-        output_csv = output_dir / f"{company_name}.csv"
+        output_md = output_dir / f"{company_name}.md"
 
-        pd.DataFrame(
-            {"markdown": ["\n".join(markdown_company)]}
-        ).to_csv(output_csv, index=False, encoding="utf-8")
+        with open(output_md, "w", encoding="utf-8") as f:
+            f.write("\n".join(markdown_company))
 
-        print(f"✔ Generado: {output_csv}")
+        print(f"Generado: {output_md}")
+
 
 
 if __name__ == "__main__":
