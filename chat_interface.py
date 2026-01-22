@@ -15,6 +15,12 @@ from langchain_core.runnables import RunnableParallel
 
 
 # =========================
+# Config (muy parecido a tu .py original)
+# Ajustado a tu estructura real (VS Code):
+# loyola-internship-finder/
+#   ├─ Data/        (markdowns)
+#   ├─ chroma_db/   (Chroma)
+#   ├─ chat_interface.py
 # =========================
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "Data"
@@ -30,23 +36,15 @@ def format_docs(docs):
 
 
 def build_rag_chain():
-    """
-    Construye el vectorstore y la cadena RAG.
-    - Reutiliza chroma_db si existe y tiene contenido.
-    - Si no existe (o está vacío), crea la BD a partir de Data/*.md
-    """
     load_dotenv()
     groq_key = os.getenv("GROQ_API_KEY")
     if not groq_key:
-        raise RuntimeError("Falta GROQ_API_KEY. Ponla en tu .env o como variable de entorno.")
+        raise RuntimeError("Falta GROQ_API_KEY en el entorno. Añádelo a tu .env o variables de entorno.")
 
-    if not DATA_DIR.exists() or not DATA_DIR.is_dir():
-        raise FileNotFoundError(
-            f"No existe la carpeta de datos: {DATA_DIR}\n"
-            f"Según tu estructura, debe ser: {BASE_DIR / 'Data'}"
-        )
+    if not DATA_DIR.exists():
+        raise FileNotFoundError(f"Directory not found: {DATA_DIR} (revisa que exista la carpeta 'Data')")
 
-    # Cargar documentos
+    # Cargar documentos (.md)
     loader = DirectoryLoader(
         str(DATA_DIR),
         glob="**/*.md",
@@ -55,10 +53,7 @@ def build_rag_chain():
     )
     documents = loader.load()
 
-    if not documents:
-        raise RuntimeError(f"No se han encontrado .md dentro de {DATA_DIR} (glob **/*.md).")
-
-    # Añadir metadata company_name = nombre del archivo sin extensión
+    # Metadata company_name
     for doc in documents:
         file_path = Path(doc.metadata.get("source", ""))
         doc.metadata["company_name"] = file_path.stem
@@ -66,7 +61,7 @@ def build_rag_chain():
     # Embeddings
     embedding_model = HuggingFaceEmbeddings(model_name=EMBEDDINGS_MODEL)
 
-    # Vectorstore (reusar o crear)
+    # Vectorstore (reusar si existe, crear si no)
     if CHROMA_DIR.exists() and any(CHROMA_DIR.iterdir()):
         vectorstore = Chroma(
             persist_directory=str(CHROMA_DIR),
@@ -85,7 +80,7 @@ def build_rag_chain():
     # Retriever
     retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
 
-    # Prompt
+    # Prompt (igual idea que tu original)
     system_prompt = """Eres un asesor de carreras de la Universidad Loyola.
 Usa SOLO la información del contexto para responder.
 Si el contexto tiene datos sobre una empresa, recomiéndala.
@@ -97,7 +92,7 @@ CONTEXTO:
         [("system", system_prompt), ("human", "{input}")]
     )
 
-    # RAG chain
+    # Cadena RAG
     rag_chain = (
         RunnableParallel(
             {
@@ -110,72 +105,51 @@ CONTEXTO:
         | StrOutputParser()
     )
 
-    return rag_chain, len(documents)
+    return rag_chain
 
 
-# ==============
-# Estado global
-# ==============
+# Cadena global (se construye una vez)
 RAG_CHAIN = None
-DOC_COUNT = 0
-
-
-def init_app():
-    global RAG_CHAIN, DOC_COUNT
-    RAG_CHAIN, DOC_COUNT = build_rag_chain()
-    return f"✅ RAG listo. Documentos cargados: {DOC_COUNT}\n📁 Data: {DATA_DIR}\n🗄️ Chroma: {CHROMA_DIR}"
 
 
 def consultar(pregunta: str) -> str:
+    global RAG_CHAIN
     if RAG_CHAIN is None:
-        init_app()
+        RAG_CHAIN = build_rag_chain()
     return RAG_CHAIN.invoke({"input": pregunta})
 
 
+# ====== Gradio (lo más simple posible) ======
 def chat_fn(message: str, history: List[Tuple[str, str]]) -> str:
-    try:
-        return consultar(message)
-    except Exception as e:
-        return f"❌ Error: {e}"
-
-
-def status_action() -> str:
-    if RAG_CHAIN is None:
-        return f"ℹ️ RAG no inicializado todavía.\n📁 Data: {DATA_DIR}\n🗄️ Chroma: {CHROMA_DIR}"
-    return f"✅ RAG activo. Documentos cargados: {DOC_COUNT}\n📁 Data: {DATA_DIR}\n🗄️ Chroma: {CHROMA_DIR}"
+    return consultar(message)
 
 
 def main():
-    # Inicializa al arrancar (sin rebuild)
-    startup_msg = init_app()
-
-    with gr.Blocks(title="Loyola Career Advisor (RAG)") as demo:
+    with gr.Blocks(title="Loyola Career Advisor") as demo:
         gr.Markdown(
-            "# Loyola Career Advisor (RAG)\n"
-            f"Lee tus markdowns de `Data/` y responde con recuperación (Chroma).\n"
+            """
+# **Loyola Career Advisor**
+
+Descubre qué empresas encajan mejor contigo para hacer prácticas universitarias.
+
+Esta herramienta te ayuda a orientarte según **tus intereses, lo que te gusta y el tipo de empresa que buscas**.
+No necesitas saber nombres de empresas ni tenerlo claro desde el principio: basta con que nos cuentes
+qué estudias, qué te motiva o qué tipo de entorno te atrae.
+
+A partir de esa información, te recomendaremos empresas donde podrías encajar mejor para realizar tus
+prácticas, basándonos en información real y actual.
+
+
+"""
         )
 
-        status = gr.Textbox(
-            label="Estado",
-            value=startup_msg,
-            interactive=False,
-            lines=3,
-        )
-
-        btn_status = gr.Button("Ver estado")
-        btn_status.click(fn=status_action, outputs=status)
-
-        gr.Markdown("## Chat")
         gr.ChatInterface(
             fn=chat_fn,
             examples=[
-                "Mi madre es farmacéutica, ¿qué empresa me recomiendas?",
+                "Me gusta la cerveza, ¿qué empresa me recomiendas?",
                 "Busco prácticas en consultoría, ¿qué empresa encaja mejor?",
-                "¿Qué empresas tienen un perfil más tecnológico?",
+                "Me interesa energía y sostenibilidad, ¿qué empresa me recomiendas?",
             ],
-            retry_btn="Reintentar",
-            undo_btn="Deshacer último",
-            clear_btn="Borrar chat",
         )
 
     demo.launch()
