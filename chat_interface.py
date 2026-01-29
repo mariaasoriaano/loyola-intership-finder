@@ -30,9 +30,15 @@ EMBEDDINGS_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 GROQ_MODEL_NAME = "llama-3.3-70b-versatile"
 TOP_K = 3
 
-
 def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
+    blocks = []
+    for doc in docs:
+        company = doc.metadata.get("company_name", "Empresa desconocida")
+        blocks.append(
+            f"EMPRESA: {company}\n{doc.page_content}"
+        )
+    return "\n\n---\n\n".join(blocks)
+
 
 
 def build_rag_chain():
@@ -81,12 +87,53 @@ def build_rag_chain():
     retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
 
     # Prompt (igual idea que tu original)
-    system_prompt = """Eres un asesor de carreras de la Universidad Loyola.
-Usa SOLO la información del contexto para responder.
-Si el contexto tiene datos sobre una empresa, recomiéndala.
+    system_prompt = system_prompt = """Eres un orientador profesional de la Universidad Loyola especializado en prácticas universitarias.
+
+Tu tarea es analizar la información del CONTEXTO y recomendar empresas
+que encajen con los intereses del estudiante.
+
+REGLAS ESTRICTAS:
+- Usa EXCLUSIVAMENTE la información del CONTEXTO
+- No inventes datos ni hagas suposiciones externas
+- Solo analiza empresas que aparezcan explícitamente en el contexto
+- Si falta información para alguna parte del análisis, indícalo claramente
+
+ESTRUCTURA OBLIGATORIA DE LA RESPUESTA:
+
+Introcucción a la respuesta...
+
+========================
+RANKING DE EMPRESAS
+========================
+
+1. Empresa: <nombre>
+   Nota sobre 10: scoring del 1 al 10
+   Justificación detallada:
+   <explicación breve y razonada de por qué esta empresa encaja con el perfil del estudiante,
+   citando elementos concretos del contexto (sector, actividad, valores, tipo de negocio, etc.)>
+
+2. Empresa: ...
+
+========================
+COMPARATIVA ECONÓMICA
+========================
+
+Realiza una comparación breve de la situación económica de las empresas recomendadas
+utilizando únicamente la información disponible en el CONTEXTO.
+
+Para cada empresa analiza, cuando esté disponible:
+- Tamaño o dimensión de la empresa
+- Estabilidad o solidez económica
+- Sector y posición en el mercado
+- Cualquier indicador económico mencionado explícitamente
+
+Si el contexto no proporciona información económica suficiente para alguna empresa,
+indícalo claramente sin inferir datos externos.
 
 CONTEXTO:
-{context}"""
+{context}
+"""
+
 
     prompt = ChatPromptTemplate.from_messages(
         [("system", system_prompt), ("human", "{input}")]
