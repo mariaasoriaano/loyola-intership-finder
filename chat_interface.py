@@ -100,7 +100,7 @@ REGLAS ESTRICTAS:
 
 ESTRUCTURA OBLIGATORIA DE LA RESPUESTA:
 
-Introcucción a la respuesta...
+Empresa TOP recomendada: 
 
 ========================
 RANKING DE EMPRESAS
@@ -109,7 +109,7 @@ RANKING DE EMPRESAS
 1. Empresa: <nombre>
    Nota sobre 10: scoring del 1 al 10
    Justificación detallada:
-   <explicación breve y razonada de por qué esta empresa encaja con el perfil del estudiante,
+   <explicación brevey razonada de por qué esta empresa encaja con el perfil del estudiante,
    citando elementos concretos del contexto (sector, actividad, valores, tipo de negocio, etc.)>
 
 2. Empresa: ...
@@ -165,7 +165,6 @@ def consultar(pregunta: str) -> str:
         RAG_CHAIN = build_rag_chain()
     return RAG_CHAIN.invoke({"input": pregunta})
 
-
 # ====== Gradio (lo más simple posible) ======
 def chat_fn(message: str, history: List[Tuple[str, str]]) -> str:
     return consultar(message)
@@ -198,7 +197,7 @@ prácticas, basándonos en información real y actual.
                 "Me interesa energía y sostenibilidad, ¿qué empresa me recomiendas?",
             ],
         )
-
+        
     demo.launch()
 
 
