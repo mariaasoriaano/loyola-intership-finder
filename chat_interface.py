@@ -30,25 +30,27 @@ EMBEDDINGS_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 GROQ_MODEL_NAME = "llama-3.3-70b-versatile"
 TOP_K = 3
 
+
 def format_docs(docs):
     blocks = []
     for doc in docs:
         company = doc.metadata.get("company_name", "Empresa desconocida")
-        blocks.append(
-            f"EMPRESA: {company}\n{doc.page_content}"
-        )
+        blocks.append(f"EMPRESA: {company}\n{doc.page_content}")
     return "\n\n---\n\n".join(blocks)
-
 
 
 def build_rag_chain():
     load_dotenv()
     groq_key = os.getenv("GROQ_API_KEY")
     if not groq_key:
-        raise RuntimeError("Falta GROQ_API_KEY en el entorno. Añádelo a tu .env o variables de entorno.")
+        raise RuntimeError(
+            "Falta GROQ_API_KEY en el entorno. Añádelo a tu .env o variables de entorno."
+        )
 
     if not DATA_DIR.exists():
-        raise FileNotFoundError(f"Directory not found: {DATA_DIR} (revisa que exista la carpeta 'Data')")
+        raise FileNotFoundError(
+            f"Directory not found: {DATA_DIR} (revisa que exista la carpeta 'Data')"
+        )
 
     # Cargar documentos (.md)
     loader = DirectoryLoader(
@@ -87,7 +89,9 @@ def build_rag_chain():
     retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
 
     # Prompt (igual idea que tu original)
-    system_prompt = system_prompt = """Eres un orientador profesional de la Universidad Loyola especializado en prácticas universitarias.
+    system_prompt = (
+        system_prompt
+    ) = """Eres un orientador profesional de la Universidad Loyola especializado en prácticas universitarias.
 
 Tu tarea es analizar la información del CONTEXTO y recomendar empresas
 que encajen con los intereses del estudiante.
@@ -134,7 +138,6 @@ CONTEXTO:
 {context}
 """
 
-
     prompt = ChatPromptTemplate.from_messages(
         [("system", system_prompt), ("human", "{input}")]
     )
@@ -157,6 +160,7 @@ CONTEXTO:
 
 # Cadena global (se construye una vez)
 RAG_CHAIN = None
+ULTIMA_RESPUESTA = ""
 
 
 def consultar(pregunta: str) -> str:
@@ -165,9 +169,33 @@ def consultar(pregunta: str) -> str:
         RAG_CHAIN = build_rag_chain()
     return RAG_CHAIN.invoke({"input": pregunta})
 
-# ====== Gradio (lo más simple posible) ======
-def chat_fn(message: str, history: List[Tuple[str, str]]) -> str:
-    return consultar(message)
+
+def chat_fn(message, history):
+    """Función del chat que guarda la última respuesta."""
+    global ULTIMA_RESPUESTA
+    res = consultar(message)
+    ULTIMA_RESPUESTA = res.split("\n")[0]
+    print("EMPRESA ELEGIDA: " + ULTIMA_RESPUESTA)
+    return res
+
+
+def generate_email_fn():
+    """Genera email basado en la última respuesta del chat."""
+    global ULTIMA_RESPUESTA
+    if not ULTIMA_RESPUESTA:
+        return "Primero consulta información sobre una empresa en el chat."
+
+    load_dotenv()
+    chat = ChatGroq(temperature=0, model_name=GROQ_MODEL_NAME)
+
+    res = chat.invoke(f"""
+    Actúa como un experto copywritter y crea un email para pedirle a esta empresa hacer las prácticas como becario.
+
+    Información de la empresa:
+    {ULTIMA_RESPUESTA}
+""")
+
+    return res.content
 
 
 def main():
@@ -184,8 +212,6 @@ qué estudias, qué te motiva o qué tipo de entorno te atrae.
 
 A partir de esa información, te recomendaremos empresas donde podrías encajar mejor para realizar tus
 prácticas, basándonos en información real y actual.
-
-
 """
         )
 
@@ -196,8 +222,26 @@ prácticas, basándonos en información real y actual.
                 "Busco prácticas en consultoría, ¿qué empresa encaja mejor?",
                 "Me interesa energía y sostenibilidad, ¿qué empresa me recomiendas?",
             ],
+            chatbot=gr.Chatbot(height=600),
+            theme=gr.themes.Soft(),
         )
-        
+
+        gr.Markdown("---")
+        gr.Markdown("### Generar email de solicitud de prácticas")
+
+        boton_email = gr.Button("Generar Email")
+        texto_email = gr.Textbox(label="Cuerpo del email", lines=10)
+        boton_email.click(
+            fn=generate_email_fn,
+            inputs=[],
+            outputs=texto_email,
+        )
+
+        copy_btn = gr.Button("📋 Copiar Texto")
+        copy_btn.click(
+            fn=None, inputs=[texto_email], js="(x) => navigator.clipboard.writeText(x)"
+        )
+
     demo.launch()
 
 
